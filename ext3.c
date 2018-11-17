@@ -29,7 +29,8 @@ void escreveBlocoDados(FILE * so);
 void readInode(FILE * so, int inode_num);
 int createFolder(FILE * so, char * name);
 void createFile(FILE * so, char * name, char * dados, int inode_dest);
-
+void simpleReadInode(FILE * so, int inode_num);
+void ls(FILE * so, int inode);
 
 int main(int argc, char const *argv[])  { 
 	
@@ -68,14 +69,15 @@ int main(int argc, char const *argv[])  {
 	createFolder(arq, "/");
 
 	createFile(arq, "ex.txt", "loremips" ,0);
+	createFile(arq, "HEHE", "@@" ,0);
+	createFile(arq, "HAHA", "!!!!" ,0);
 
-	readInode(arq, 0);
-	readInode(arq, 1);
+	
 
 	// esta criado o sistema, agora é só criar pastas
 	// e arquivos dentro dele
 
-
+	ls(arq, 0);
 
 
 	fclose(arq);
@@ -89,6 +91,7 @@ void escreveBlocoDados(FILE * so) {
 	strcpy(novo.nome, "null");
 	novo.tam = 0;
 	novo.ponteiro_indireto = 0;
+	
 
 	fwrite(&novo, sizeof(novo), 1, so);
 }
@@ -101,7 +104,18 @@ void readInode(FILE * so, int inode_num) {
 
 	fread(&aux, sizeof(aux), 1, so);
 
-	printf("inodo n.%d: \nStatus: %d\nPasta: %d\n Nome: %s \nDados direto: %s",inode_num, aux.status,aux.pasta, aux.nome, aux.dados);
+	printf("\n Inodo n.%d: \nStatus: %d\nPasta: %d\n Nome: %s \nDados direto: %s \n",inode_num, aux.status,aux.pasta, aux.nome, aux.dados);
+}
+
+void simpleReadInode(FILE * so, int inode_num) {
+	struct inodo aux;
+	int pos = 2+ (sizeof(aux)*inode_num);
+
+	fseek(so, pos,SEEK_SET);
+
+	fread(&aux, sizeof(aux), 1, so);
+
+	printf("\n Pasta: %d\n Nome: %s \nDados direto: %s \n",inode_num, aux.status,aux.pasta, aux.nome, aux.dados);
 }
 
 // cria uma pasta, retorna o numero do inodo
@@ -123,6 +137,7 @@ int createFolder(FILE * so, char * name) {
 	int pos = 2+ (sizeof(novo)*inode_num);
 
 	fseek(so, pos,SEEK_SET);
+	
 
 	novo.status=1; // ocupado
 	novo.pasta=1; // diz que é uma pasta
@@ -167,6 +182,7 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 		strcpy(novo.dados, dados);
 	}
 
+	// insere novo inodo no arquivo
 	fwrite(&novo, sizeof(novo), 1, so);
 	
 	
@@ -177,17 +193,17 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 	pos = 2+ (sizeof(novo)*inode_dest);
 	fseek(so, pos,SEEK_SET);
 
-	fwrite(&aux, sizeof(aux), 1, so);	
+	fread(&aux, sizeof(aux), 1, so);	
 	aux.tam += 1;
 
 	// inserir ponteiro na proxima posicao livre
 	int contador = 0;
 
-
 	if(aux.tam < 32) {
 		while(contador < 32) {
 			if(aux.dados[contador] == '\0') {
-				aux.dados[contador] = inode_novo;
+				aux.dados[contador] = (char) inode_novo;
+				printf("\n inseri %d, na pos %d", aux.dados[contador], contador);
 				break;
 			}
 			contador++;
@@ -197,4 +213,37 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 		// olhar o próximo disponível
 	}	
 
+	// insere alteração do ponteiro adicionado
+	fseek(so, pos,SEEK_SET);
+	fwrite(&aux, sizeof(aux), 1, so);
 }
+
+// lista tudo que tem em um inodo pasta
+void ls(FILE * so, int inode) {
+	struct inodo aux;
+	int pos = sizeof(super_bloco) + inode;
+	int posAntiga;
+
+	// vai para a posicao do inode
+	fseek(so, pos,SEEK_SET);
+
+	// carrega inodo da pasta que 
+	// o cara quer ver
+	fread(&aux, sizeof(aux), 1, so);
+
+	// numero de elementos que devem ser
+	// percorridos
+
+	int numero_arquivos = aux.tam;
+
+	for(int i = 0; i < strlen(aux.dados); i++) {
+		if(aux.dados[i] != '\0' || aux.dados[i] > 0) {
+			// se é um inode valido
+			printf("\nINODO =  %d", aux.dados[i]);
+			//simpleReadInode(so, )
+		}
+	}
+	
+
+}
+
