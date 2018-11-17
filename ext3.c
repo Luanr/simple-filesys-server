@@ -67,7 +67,10 @@ int main(int argc, char const *argv[])  {
 	// cria a pasta master, /
 	createFolder(arq, "/");
 
+	createFile(arq, "ex.txt", "loremips" ,0);
+
 	readInode(arq, 0);
+	readInode(arq, 1);
 
 	// esta criado o sistema, agora é só criar pastas
 	// e arquivos dentro dele
@@ -131,12 +134,15 @@ int createFolder(FILE * so, char * name) {
 	return inode_num;
 }
 
-// cria um arquivo e retorna o inode dele
+// cria um arquivo na pasta inode_dest
 void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 	// @todo: colocar .. como endereço do diretorio pai
 	int inode_novo;
 	struct inodo novo, aux;
 
+	fseek(so, sizeof(super_bloco),SEEK_SET);
+
+	// procura inodo vazio para colocar novo arquivo
 	for(int i = 0; i < n_inodes; i++) {
 		fread(&novo, sizeof(novo), 1, so);
 		if(novo.status == 0) { // encontrou um bloco vazio
@@ -154,7 +160,6 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 	strcpy(novo.nome, name); // altera nome da arquivo
 	novo.tam = strlen(dados);
 	
-	/* */
 
 	if(novo.tam > 32) { // aloca blocos indiretos
 
@@ -164,16 +169,32 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 
 	fwrite(&novo, sizeof(novo), 1, so);
 	
+	
+
 	// coloca o endereço do inode atual na pasta
 
+	// inode_dest é o inode da pasta que possui o arquivo
 	pos = 2+ (sizeof(novo)*inode_dest);
 	fseek(so, pos,SEEK_SET);
 
-	fwrite(&aux, sizeof(aux), 1, so);
-	
+	fwrite(&aux, sizeof(aux), 1, so);	
 	aux.tam += 1;
-	
 
-	// percorre os dados encontrando espaço vazio
+	// inserir ponteiro na proxima posicao livre
+	int contador = 0;
+
+
+	if(aux.tam < 32) {
+		while(contador < 32) {
+			if(aux.dados[contador] == '\0') {
+				aux.dados[contador] = inode_novo;
+				break;
+			}
+			contador++;
+		}
+	} else { // olha nos indiretos
+		// se nao tiver indireto alocado, alocar
+		// olhar o próximo disponível
+	}	
 
 }
