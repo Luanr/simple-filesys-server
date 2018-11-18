@@ -7,6 +7,9 @@
 #define n_inodes 4
 #define comeco_ponteiros (2 + (sizeof(struct inodo) * n_inodes)) // 46
 
+#define ANSI_BOLDBLUE    "\033[1m\033[34m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
 struct superblock {
 	//uint8_t block_size;
 	//uint8_t number_blocks;
@@ -92,7 +95,6 @@ void escreveBlocoDados(FILE * so) {
 	novo.tam = 0;
 	novo.ponteiro_indireto = 0;
 	
-
 	fwrite(&novo, sizeof(novo), 1, so);
 }
 
@@ -115,7 +117,11 @@ void simpleReadInode(FILE * so, int inode_num) {
 
 	fread(&aux, sizeof(aux), 1, so);
 
-	printf("\n Pasta: %d\n Nome: %s \nDados direto: %s \n",inode_num, aux.status,aux.pasta, aux.nome, aux.dados);
+	if(aux.pasta) { // se é uma pasta, pintar de azul
+		printf(ANSI_BOLDBLUE "\n%s" ANSI_COLOR_RESET, aux.nome);
+	} else {
+		printf("\n%s", aux.nome);
+	}
 }
 
 // cria uma pasta, retorna o numero do inodo
@@ -143,6 +149,9 @@ int createFolder(FILE * so, char * name) {
 	novo.pasta=1; // diz que é uma pasta
 	strcpy(novo.nome, name); // altera nome da pasta
 	novo.tam = 0;
+	for(int i = 0; i < 32; i++) {
+		novo.dados[i] = 0;
+	}
 
 	fwrite(&novo, sizeof(novo), 1, so);
 	
@@ -175,7 +184,6 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 	strcpy(novo.nome, name); // altera nome da arquivo
 	novo.tam = strlen(dados);
 	
-
 	if(novo.tam > 32) { // aloca blocos indiretos
 
 	} else { // aloca normalmente
@@ -203,7 +211,6 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 		while(contador < 32) {
 			if(aux.dados[contador] == '\0') {
 				aux.dados[contador] = (char) inode_novo;
-				printf("\n inseri %d, na pos %d", aux.dados[contador], contador);
 				break;
 			}
 			contador++;
@@ -216,6 +223,9 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 	// insere alteração do ponteiro adicionado
 	fseek(so, pos,SEEK_SET);
 	fwrite(&aux, sizeof(aux), 1, so);
+
+	//printf("\n\n Para o arquivo %s", novo.nome);
+
 }
 
 // lista tudo que tem em um inodo pasta
@@ -236,11 +246,13 @@ void ls(FILE * so, int inode) {
 
 	int numero_arquivos = aux.tam;
 
+
 	for(int i = 0; i < strlen(aux.dados); i++) {
-		if(aux.dados[i] != '\0' || aux.dados[i] > 0) {
+		if(aux.dados[i] != 0) {
 			// se é um inode valido
-			printf("\nINODO =  %d", aux.dados[i]);
-			//simpleReadInode(so, )
+			//printf("\nINODO =  %d", aux.dados[i]);
+			int inodo_filho = aux.dados[i] - '0';
+			simpleReadInode(so, inodo_filho);
 		}
 	}
 	
