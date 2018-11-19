@@ -4,8 +4,8 @@
 #include <string.h>
 
 #define BLOCK_SIZE 32
-#define n_inodes 4
-#define comeco_ponteiros (2 + (sizeof(struct inodo) * n_inodes)) // 46
+#define n_inodes 8
+#define comeco_ponteiros (sizeof(super_block) + (sizeof(inodo) * n_inodes)) // 46
 
 #define ANSI_BOLDBLUE    "\033[1m\033[34m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
@@ -19,21 +19,27 @@ struct superblock {
 
 struct inodo { // tam inodo = 1+1+8+2+32+2 = 46 bytes
 	uint8_t status; // 1 byte
-	uint8_t pasta; // 0 para sim, 1 para não
+	uint8_t pasta; // 1 para sim, 0 para não
 	char nome[8]; // nome do arquivo
 	uint16_t tam; // tam do arquivo
 	char dados[32]; // se for um arquivo, poderá ter 4 pastas dentro
 	// se for mais terá de alocar nos indiretos, tam representará a quantidade de pastas
  	uint16_t ponteiro_indireto; // ponteiro indireto para o bloco
 	// de dados de ponteiro
+	/* 
+	char timestamp[16];
+	uint8_t permissions[3]; // r-w-x
+
+	*/
 };
 
 void escreveBlocoDados(FILE * so);
 void readInode(FILE * so, int inode_num);
-int createFolder(FILE * so, char * name);
+void createFolder(FILE * so, char * name);
 void createFile(FILE * so, char * name, char * dados, int inode_dest);
 void simpleReadInode(FILE * so, int inode_num);
 void ls(FILE * so, int inode);
+int procuraInodo(FILE * so, int inodo_pai, char * name);
 
 int main(int argc, char const *argv[])  { 
 	
@@ -45,8 +51,6 @@ int main(int argc, char const *argv[])  {
 	super_bloco.prox_disponivel = (uint16_t) 10; // ultimo item da pilha
 
 	fwrite(&super_bloco, sizeof(super_bloco), 1, arq);
-	char oi[2];
-	//fwrite(&oi, sizeof(oi), 1, arq);
 
 	for(int i = 0; i < n_inodes; i++) {
 		escreveBlocoDados(arq);
@@ -75,13 +79,13 @@ int main(int argc, char const *argv[])  {
 	createFile(arq, "HEHE", "@@" ,0);
 	createFile(arq, "HAHA", "!!!!" ,0);
 
-	
 
 	// esta criado o sistema, agora é só criar pastas
 	// e arquivos dentro dele
 
 	ls(arq, 0);
 
+	printf("Inodo n = %d", procuraInodo(arq, 0, "ex.txt"));
 
 	fclose(arq);
 	return 0; 
@@ -115,6 +119,7 @@ void simpleReadInode(FILE * so, int inode_num) {
 
 	fseek(so, pos,SEEK_SET);
 
+
 	fread(&aux, sizeof(aux), 1, so);
 
 	if(aux.pasta) { // se é uma pasta, pintar de azul
@@ -125,7 +130,7 @@ void simpleReadInode(FILE * so, int inode_num) {
 }
 
 // cria uma pasta, retorna o numero do inodo
-int createFolder(FILE * so, char * name) {
+void createFolder(FILE * so, char * name) {
 	int inode_num;
 	struct inodo novo;
 
@@ -155,7 +160,8 @@ int createFolder(FILE * so, char * name) {
 
 	fwrite(&novo, sizeof(novo), 1, so);
 	
-	return inode_num;
+	// inodenum é o endereço
+
 }
 
 // cria um arquivo na pasta inode_dest
@@ -203,7 +209,6 @@ void createFile(FILE * so, char * name, char * dados, int inode_dest) {
 
 	fread(&aux, sizeof(aux), 1, so);	
 	aux.tam += 1;
-
 	// inserir ponteiro na proxima posicao livre
 	int contador = 0;
 
@@ -255,7 +260,44 @@ void ls(FILE * so, int inode) {
 			simpleReadInode(so, inodo_filho);
 		}
 	}
-	
-
 }
 
+/* procura inodo com aquele nome dentro
+	da pasta do inodo pai
+	se nao encontrar, retorna -1
+ */
+int procuraInodo(FILE * so, int inodo_pai, char * name) {
+	struct inodo pai;
+	int pos = sizeof(super_bloco) + inodo_pai;
+	int contador = 0;
+	char * nome_aux;
+
+	fseek(so, pos,SEEK_SET);
+	fread(&pai, sizeof(pai), 1, so);
+
+	while(contador < pai.tam) {
+		// se nao for um ponteiro vazio
+
+		if(pai.dados[contador] != 0) {
+
+			struct inodo filho;
+
+
+			pos = 2 + sizeof(filho) * ((int) pai.dados[contador]);
+
+			fseek(so, pos,SEEK_SET);
+			fread(&filho, sizeof(filho), 1, so);
+
+			// se ele possui o mesmo nome, retornar
+			// a posicao
+
+			if(strcmp(filho.nome, name) == 0) {
+				return ((pos- sizeof(super_bloco))/sizeof(filho));
+			}
+		}
+		contador++;
+	}
+
+	// caso ele nao encontre o arquivo, ele vai retornar -1
+	return -1;
+}
